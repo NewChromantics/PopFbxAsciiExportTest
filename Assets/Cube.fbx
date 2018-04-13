@@ -1,0 +1,25 @@
+;  Using WIP PopX.FbxAscii exporter from @soylentgraham
+
+
+FBXHeaderExtension:
+{
+	FBXHeaderVersion: 1003
+	FBXVersion: 7500
+	CreationTimeStamp:
+	{
+		Version: 1000
+		Year: 2018
+		Month: 4
+		Day: 13
+		Hour: 17
+		Minute: 19
+		Second: 42
+		Millisecond: 918
+	}
+}
+Objects: {
+	Model: "Model::Cube", "Mesh" {
+		
+		
+}
+}
