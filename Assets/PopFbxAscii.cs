@@ -9,7 +9,7 @@ using UnityEditor;
 
 
 
-public class AnimFrame
+public struct AnimFrame
 {
 	public Vector3 Position;
 	public Quaternion Rotation;
@@ -21,6 +21,17 @@ public class AnimFrame
 public class AnimObject
 {
 	public List<AnimFrame> Frames;
+
+	public void AddFrame(Vector3 Position,Quaternion Rotation,float Time)
+	{
+		var Frame = new AnimFrame();
+		Frame.Position = Position;
+		Frame.Rotation = Rotation;
+		Frame.Scale = Vector3.one;
+		Frame.Time = Time;
+		Pop.AllocIfNull(ref Frames);
+		Frames.Add(Frame);
+	}
 
 	public void GetCurveData(out float[] x, out float[] y, out float[] z, System.Func<AnimFrame, float> GetX, System.Func<AnimFrame, float> GetY,System.Func<AnimFrame, float> GetZ)
 	{
@@ -81,31 +92,32 @@ namespace PopX
 		}
 
 		//	add value
-		public void Add(FbxValue Value)
-		{
-			Values.Add(Value);
-		}
+		public void AddValue(FbxValue Value)	{	Values.Add(Value);	}
+		public void AddValue(string Value)		{	AddValue(FbxValues.Create(Value));	}
+		public void AddValue(int Value)			{	AddValue(FbxValues.Create(Value));	}
+		public void AddValue(float Value)		{	AddValue(FbxValues.Create(Value));	}
+
 
 		//	add child property
-		public FbxProperty Add(string PropertyName, int Value) { return Add(PropertyName, FbxValues.Create(Value)); }
-		public FbxProperty Add(string PropertyName, string Value) { return Add(PropertyName, FbxValues.Create(Value)); }
+		public FbxProperty AddProperty(string PropertyName, int Value) { return AddProperty(PropertyName, FbxValues.Create(Value)); }
+		public FbxProperty AddProperty(string PropertyName, string Value) { return AddProperty(PropertyName, FbxValues.Create(Value)); }
 
-		public FbxProperty Add(string PropertyName, FbxValue Value)
+		public FbxProperty AddProperty(string PropertyName, FbxValue Value)
 		{
 			var Prop = new FbxProperty(PropertyName);
-			Prop.Add(Value);
-			Add(Prop);
+			Prop.AddValue(Value);
+			AddProperty(Prop);
 			return Prop;
 		}
 
 		public FbxProperty AddProperty(string PropertyName)
 		{
 			var Prop = new FbxProperty(PropertyName);
-			Add(Prop);
+			AddProperty(Prop);
 			return Prop;
 		}
 
-		public void Add(FbxProperty Child)
+		public void AddProperty(FbxProperty Child)
 		{
 			if (Children == null)
 				Children = new List<FbxProperty>();
@@ -135,6 +147,7 @@ namespace PopX
 	{
 		static public FbxValue Create(string Value) { return new FbxValue_String(Value); }
 		static public FbxValue Create(int Value) { return new FbxValue_Ints(Value); }
+		static public FbxValue Create(float Value) { return new FbxValue_Floats(Value); }
 	};
 
 	public struct FbxValue_Property : FbxValue
@@ -168,25 +181,32 @@ namespace PopX
 			return String;
 		}
 
-		public FbxValue_Floats(Vector3 v) { Numbers = null;	Append(v); }
+		public FbxValue_Floats(float v) { Numbers = null; Append(v); }
+		public FbxValue_Floats(float[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
+		public FbxValue_Floats(Vector3 v) { Numbers = null; Append(v); }
 		public FbxValue_Floats(Vector3[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
 		public FbxValue_Floats(Vector3[] vs,System.Func<Vector3,Vector3> transform) { Numbers = null; foreach (var v in vs) Append(transform(v)); }
 
 		void Append(Vector3 v)
 		{
+			Append(v.x);
+			Append(v.y);
+			Append(v.z);
+		}
+
+		void Append(float v)
+		{
 			if (Numbers == null)
 				Numbers = new List<float>();
-			Numbers.Add(v.x);
-			Numbers.Add(v.y);
-			Numbers.Add(v.z);
+			Numbers.Add(v);
 		}
 	};
 
 	public struct FbxValue_Ints : FbxValue
 	{
-		public List<int> Numbers;
+		public List<long> Numbers;
 
-		static string GetString(int f)
+		static string GetString(long f)
 		{
 			return f.ToString();
 		}
@@ -201,11 +221,12 @@ namespace PopX
 		public FbxValue_Ints(int v) { Numbers = null; Append(v); }
 		public FbxValue_Ints(int[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
 		public FbxValue_Ints(List<int> vs) { Numbers = null; foreach (var v in vs) Append(v); }
+		public FbxValue_Ints(List<long> vs) { Numbers = null; foreach (var v in vs) Append(v); }
 
-		void Append(int v)
+		void Append(long v)
 		{
 			if (Numbers == null)
-				Numbers = new List<int>();
+				Numbers = new List<long>();
 			Numbers.Add(v);
 		}
 	};
@@ -260,19 +281,19 @@ namespace PopX
 
 		public const long KTime_Second = 46186158000;
 
-		static FbxProperty GetHeaderProperty(string Creator="Pop FbxAscii Exporter")
+		static FbxProperty GetHeaderProperty(string Creator = "Pop FbxAscii Exporter")
 		{
 			var Root = new FbxProperty("FBXHeaderExtension");
-			Root.Add("FBXHeaderVersion",1003);
-			Root.Add("FBXVersion", Version);
-			Root.Add("Creator", Creator);
+			Root.AddProperty("FBXHeaderVersion", 1003);
+			Root.AddProperty("FBXVersion", Version);
+			Root.AddProperty("Creator", Creator);
 
 			//	won't load in unity without this comment at the top
-			Root.AddComment("FBX " + VersionMajor+"."+VersionMinor+"."+VersionRelease.ToString("D2") +"  project file");
+			Root.AddComment("FBX " + VersionMajor + "." + VersionMinor + "." + VersionRelease.ToString("D2") + "  project file");
 			return Root;
 		}
 
-		static List<int> GetMeshIndexes(int[] Indexes,MeshTopology Topology)
+		static List<int> GetMeshIndexes(int[] Indexes, MeshTopology Topology)
 		{
 			int PolyIndexCount;
 			if (Topology == MeshTopology.Triangles)
@@ -280,72 +301,85 @@ namespace PopX
 			else if (Topology == MeshTopology.Quads)
 				PolyIndexCount = 4;
 			else
-				throw new System.Exception("meshes of " + Topology +" are unsupported");
+				throw new System.Exception("meshes of " + Topology + " are unsupported");
 
 			var FbxIndexes = new List<int>(Indexes.Length);
-			var Poly = new List<int>( new int[PolyIndexCount] );
+			var Poly = new List<int>(new int[PolyIndexCount]);
 
-			for (int i = 0; i < Indexes.Length; i +=PolyIndexCount)
+			for (int i = 0; i < Indexes.Length; i += PolyIndexCount)
 			{
 				for (int p = 0; p < PolyIndexCount; p++)
 					Poly[p] = Indexes[i + p];
 				//	add in reverse order - imports with reverse winding it seems
 				if (ReversePolygonOrder)
 					Poly.Reverse();
-			
+
 				//	last one denotes end of polygon and is negative (+1)
-				Poly[PolyIndexCount - 1] = -(Poly[PolyIndexCount - 1]+1);
+				Poly[PolyIndexCount - 1] = -(Poly[PolyIndexCount - 1] + 1);
 				FbxIndexes.AddRange(Poly);
 			}
 			return FbxIndexes;
 		}
 
-		static FbxObject CreateFbxObject(Mesh mesh, Matrix4x4 transform,FbxObjectManager ObjectManager)
+		static FbxObject CreateAnimLayerObject(FbxObjectManager ObjectManager)
+		{
+			var Object = ObjectManager.CreateObject("AnimationLayer");
+			Object.Definition.AddValue(Object.Ident);
+			Object.Definition.AddValue("AnimLayer::BaseLayer");
+			Object.Definition.AddValue("");
+			//AnimationLayer: 3445458688, , "AnimLayer::BaseLayer" {
+			Object.Definition.AddProperty("Dummy");
+			return Object;
+		}
+
+		static FbxObject CreateFbxObject(Mesh mesh, Matrix4x4 transform, FbxObjectManager ObjectManager)
 		{
 			var Object = ObjectManager.CreateObject(mesh.name);
 			Object.Definition = new FbxProperty("Model");
 
 			var Model = Object.Definition;
-			Model.Add(FbxValues.Create("Model::" + mesh.name));
-			Model.Add(FbxValues.Create("Mesh"));
+			//	gr: doesnt load in unity with an ident
+			//Model.AddValue(Object.Ident);
+			Model.AddValue("Model::" + mesh.name);
+			Model.AddValue("Mesh");
 
-			Model.Add("Version", 232);
-			Model.Add("Vertices", new FbxValue_Floats(mesh.vertices, (n) => { return transform.MultiplyPoint(n); }));
+			Model.AddProperty("Version", 232);
+			Model.AddProperty("Vertices", new FbxValue_Floats(mesh.vertices, (n) => { return transform.MultiplyPoint(n); }));
 			//	indexes start at 1, and last in poly is negative
 			var FbxIndexes = GetMeshIndexes(mesh.GetIndices(0), mesh.GetTopology(0));
-			Model.Add("PolygonVertexIndex", new FbxValue_Ints(FbxIndexes));
-			Model.Add("GeometryVersion", 124);
+			Model.AddProperty("PolygonVertexIndex", new FbxValue_Ints(FbxIndexes));
+			Model.AddProperty("GeometryVersion", 124);
 
 			int LayerNumber = 0;
-			var NormalLayer = Model.Add("LayerElementNormal", LayerNumber);
-			NormalLayer.Add("Version", 101);
-			NormalLayer.Add("Name", "");
+			var NormalLayer = Model.AddProperty("LayerElementNormal", LayerNumber);
+			NormalLayer.AddProperty("Version", 101);
+			NormalLayer.AddProperty("Name", "");
 			//	ByPolygon	It means that there is a normal for every polygon of the model.
 			//	ByPolygonVertex	It means that there is a normal for every vertex of every polygon of the model.
 			//	ByVertex	It means that there is a normal for every vertex of the model.
 			//	gr: ByVertex "Unsupported wedge mapping mode type.Please report this bug."
 			//		even though I think that's the right one to use.. as ByPolygonVertex looks wrong
-			NormalLayer.Add("MappingInformationType", "ByPolygonVertex");
-			NormalLayer.Add("ReferenceInformationType", "Direct");
-			NormalLayer.Add("Normals",new FbxValue_Floats(mesh.normals, (n) => { return transform.MultiplyVector(n); }));
+			NormalLayer.AddProperty("MappingInformationType", "ByPolygonVertex");
+			NormalLayer.AddProperty("ReferenceInformationType", "Direct");
+			NormalLayer.AddProperty("Normals", new FbxValue_Floats(mesh.normals, (n) => { return transform.MultiplyVector(n); }));
 
-			var Layer = Model.Add("Layer", LayerNumber);
-			Layer.Add("Version", 100);
+			var Layer = Model.AddProperty("Layer", LayerNumber);
+			Layer.AddProperty("Version", 100);
 			var len = Layer.AddProperty("LayerElement");
-			len.Add("Type", "LayerElementNormal");
-			len.Add("TypedIndex", 0);
+			len.AddProperty("Type", "LayerElementNormal");
+			len.AddProperty("TypedIndex", 0);
 			var les = Layer.AddProperty("LayerElement");
-			les.Add("Type", "LayerElementSmoothing");
-			les.Add("TypedIndex", 0);
+			les.AddProperty("Type", "LayerElementSmoothing");
+			les.AddProperty("TypedIndex", 0);
 			var leuv = Layer.AddProperty("LayerElement");
-			leuv.Add("Type", "LayerElementUV");
-			leuv.Add("TypedIndex", 0);
+			leuv.AddProperty("Type", "LayerElementUV");
+			leuv.AddProperty("TypedIndex", 0);
 			var let = Layer.AddProperty("LayerElement");
-			let.Add("Type", "LayerElementTexture");
-			let.Add("TypedIndex", 0);
+			let.AddProperty("Type", "LayerElementTexture");
+			let.AddProperty("TypedIndex", 0);
 			var lem = Layer.AddProperty("LayerElement");
-			lem.Add("Type", "LayerElementMaterial");
-			lem.Add("TypedIndex", 0);
+			lem.AddProperty("Type", "LayerElementMaterial");
+			lem.AddProperty("TypedIndex", 0);
 
 			return Object;
 		}
@@ -353,12 +387,12 @@ namespace PopX
 		static FbxProperty GetDefinitionsProperty(int MeshCount)
 		{
 			var Defs = new FbxProperty("Definitions");
-			Defs.Add("Version", 100);
-			Defs.Add("Count", MeshCount);
-			var otm = Defs.Add("ObjectType", "Model");
-			otm.Add("Count", MeshCount);
-			var otg = Defs.Add("ObjectType", "Geometry");
-			otg.Add("Count", MeshCount);
+			Defs.AddProperty("Version", 100);
+			Defs.AddProperty("Count", MeshCount);
+			var otm = Defs.AddProperty("ObjectType", "Model");
+			otm.AddProperty("Count", MeshCount);
+			var otg = Defs.AddProperty("ObjectType", "Geometry");
+			otg.AddProperty("Count", MeshCount);
 
 			return Defs;
 		}
@@ -367,17 +401,17 @@ namespace PopX
 		{
 			var ConnectionsProp = new FbxProperty("Connections");
 
-			foreach ( var Connection in Connections )
+			foreach (var Connection in Connections)
 			{
 				var Prop = ConnectionsProp.AddProperty("Connect");
-				foreach ( var Value in Connection )
+				foreach (var Value in Connection)
 				{
 					if (Value is string)
-						Prop.Add(FbxValues.Create((string)Value));
+						Prop.AddValue((string)Value);
 					if (Value is Mesh)
-						Prop.Add(FbxValues.Create("Model::"+((Mesh)Value).name));
+						Prop.AddValue("Model::" + ((Mesh)Value).name);
 					if (Value is Material)
-						Prop.Add(FbxValues.Create("Material::"+((Material)Value).name));
+						Prop.AddValue("Material::" + ((Material)Value).name);
 				}
 			}
 
@@ -392,15 +426,16 @@ namespace PopX
 			return String;
 		}
 
-		public static void Export(System.Action<string> WriteLine, FbxProperty Property,int Indent=0)
+		public static void Export(System.Action<string> WriteLine, FbxProperty Property, int Indent = 0)
 		{
+			var IndentStr = GetIndent(Indent);
 			foreach (var Comment in Property.Comments)
-				WriteLine(Tag_Comment + Comment);
+				WriteLine(IndentStr + Tag_Comment + Comment);
 
-			var ValuesLine = GetIndent(Indent) + Property.Name + ": ";
+			var ValuesLine = IndentStr + Property.Name + ": ";
 			var Values = Property.Values;
 
-			for (int i = 0; i < Values.Count;	i++ )
+			for (int i = 0; i < Values.Count; i++)
 			{
 				var Value = Values[i];
 				if (i > 0)
@@ -411,16 +446,16 @@ namespace PopX
 			WriteLine(ValuesLine);
 
 			//	open tree
-			if (Property.Children!=null)
+			if (Property.Children != null)
 			{
-				WriteLine(GetIndent(Indent)+"{");
-				foreach ( var Child in Property.Children )
+				WriteLine(IndentStr + "{");
+				foreach (var Child in Property.Children)
 					Export(WriteLine, Child, Indent + 1);
-				WriteLine(GetIndent(Indent) +"}");
+				WriteLine(IndentStr + "}");
 			}
 		}
 
-		public static void Export(System.Action<string> WriteLine,List<FbxProperty> Tree, List<string> Comments = null)
+		public static void Export(System.Action<string> WriteLine, List<FbxProperty> Tree, List<string> Comments = null)
 		{
 			Pop.AllocIfNull(ref Comments);
 			Comments.Add("Using WIP PopX.FbxAscii exporter from @soylentgraham");
@@ -429,9 +464,9 @@ namespace PopX
 			WriteLine(null);
 
 			//	write out the tree
-			foreach ( var Prop in Tree)
+			foreach (var Prop in Tree)
 			{
-				Export(WriteLine,Prop);
+				Export(WriteLine, Prop);
 				WriteLine(null);
 			}
 		}
@@ -439,31 +474,32 @@ namespace PopX
 		static void Export(System.Action<string> WriteLine, FbxObjectManager ObjectManager)
 		{
 			var ObjectPropertys = new FbxProperty("Objects");
-			foreach ( var Object in ObjectManager.Objects )
+			foreach (var Object in ObjectManager.Objects)
 			{
-				ObjectPropertys.Add(Object.Definition);
+				ObjectPropertys.AddProperty(Object.Definition);
 			}
 			Export(WriteLine, ObjectPropertys);
 		}
 
-		public static void Export(System.Action<string> WriteLine,Mesh mesh,Matrix4x4 transform,List<string> Comments=null)
+		public static void Export(System.Action<string> WriteLine, Mesh mesh, Matrix4x4 transform, List<string> Comments = null)
 		{
 			Pop.AllocIfNull(ref Comments);
 			Comments.Add("Using WIP PopX.FbxAscii exporter from @soylentgraham");
 
 			var Header = GetHeaderProperty();
 			Header.AddComment(Comments);
-			Export(WriteLine,Header);
+			Export(WriteLine, Header);
 
-
+			var ConnectionManager = new FbxConnectionManager();
 			var ObjectManager = new FbxObjectManager();
-			CreateFbxObject(mesh, transform, ObjectManager);
-			Export(WriteLine, ObjectManager);
+			var MeshObject = CreateFbxObject(mesh, transform, ObjectManager);
+			var AnimLayer = CreateAnimLayerObject(ObjectManager);
 
-			//	todo: get details from object manager
-			var Definitions = GetDefinitionsProperty(1);
-			Export(WriteLine, Definitions);
-
+			//	create anim
+			var MeshAnim = new AnimObject();
+			MeshAnim.AddFrame(Vector3.zero, Quaternion.identity, 0);
+			MeshAnim.AddFrame(Vector3.one, Quaternion.identity, 1);
+			MakeAnimationNode(MeshAnim, MeshObject, AnimLayer, ObjectManager, ConnectionManager);
 
 			var SceneMesh = new Mesh();
 			SceneMesh.name = "Scene";
@@ -472,10 +508,17 @@ namespace PopX
 			//var meshMaterial = new Material("Contents");
 			//meshMaterial.name = "DummyMaterial";
 
+
+			//	ConnectionManager
 			var Connections = new List<object[]>();
 			Connections.Add(new object[] { "OO", mesh, SceneMesh });
 			Connections.Add(new object[] { "OO", meshMaterial, mesh });
 
+			Export(WriteLine, ObjectManager);
+
+			//	todo: get details from object manager
+			var Definitions = GetDefinitionsProperty(1);
+			Export(WriteLine, Definitions);
 
 
 			var ConnectionsProp = GetConnectionsProperty(Connections);
@@ -535,15 +578,26 @@ namespace PopX
 
 		class FbxObject
 		{
-			public string Name;
 			public int Ident;
-			public FbxProperty Definition;	//	property that goes in objects
-
-			public FbxObject(int Ident)
+			public FbxProperty Definition;  //	property that goes in objects
+			public string TypeName	{ get { return Definition.Name; }}
+			
+			public FbxObject(int Ident,string TypeName)
 			{
-				this.Name = "Name";
 				this.Ident = Ident;
-				this.Definition = null;
+				this.Definition = new FbxProperty(TypeName);
+			}
+		}
+
+		static string GetTypeString(FbxAnimationCurveNodeType Type)
+		{
+			switch (Type)
+			{
+				case FbxAnimationCurveNodeType.Translation: return "T";
+				case FbxAnimationCurveNodeType.Rotation: return "R";
+				case FbxAnimationCurveNodeType.Scale: return "S";
+				case FbxAnimationCurveNodeType.Visibility: return "Visibility";
+				default: throw new System.Exception("Unknown type " + Type);
 			}
 		}
 
@@ -558,77 +612,121 @@ namespace PopX
 				return IdentCounter;
 			}
 
-			public FbxObject CreateObject(string Name)
+			public FbxObject CreateObject(string TypeName)
 			{
-				var Node = new FbxObject(AllocIdent());
+				var Node = new FbxObject(AllocIdent(),TypeName);
 				Objects.Add(Node);
-				Node.Name = Name;
 				return Node;
 			}
 
+
+
 			public FbxObject AddAnimationCurveNode(FbxAnimationCurveNodeType NodeType,Vector3 DefaultValue)
 			{
-				var Node = new FbxObject(AllocIdent());
+				var Node = new FbxObject(AllocIdent(),"AnimationCurveNode");
 				Objects.Add(Node);
+
+				//string nodeData = inputId + ", \"AnimCurveNode::" + curveTypeStr + "\", \"\"";
+				//FbxDataNode animCurveNode = new FbxDataNode(nodeName, nodeData, 1);
+				string CurveTypeStr = GetTypeString(NodeType);
+				Node.Definition.AddValue(Node.Ident);
+				Node.Definition.AddValue("AnimCurveNode::" + CurveTypeStr);
+				Node.Definition.AddValue("");
+
+				//FbxDataNode propertiesNode = new FbxDataNode("Properties70", "", 2);
+				//animCurveNode.addSubNode(propertiesNode);
+				var PropertiesNode = Node.Definition.AddProperty("Properties70");
+				//propertiesNode.addSubNode(new FbxDataNode("P", "\"d|X\", \"Number\", \"\", \"A\"," + initData.x, 3));
+				//propertiesNode.addSubNode(new FbxDataNode("P", "\"d|Y\", \"Number\", \"\", \"A\"," + initData.y, 3));
+				//propertiesNode.addSubNode(new FbxDataNode("P", "\"d|Z\", \"Number\", \"\", \"A\"," + initData.z, 3));
+				var px = PropertiesNode.AddProperty("P");
+				px.AddValue("d|X");
+				px.AddValue("Number");
+				px.AddValue("");
+				px.AddValue("A");
+				px.AddValue(DefaultValue.x);
+
+				var py = PropertiesNode.AddProperty("P");
+				py.AddValue("d|Y");
+				py.AddValue("Number");
+				py.AddValue("");
+				py.AddValue("A");
+				py.AddValue(DefaultValue.y);
+
+
+				var pz = PropertiesNode.AddProperty("P");
+				pz.AddValue("d|Z");
+				pz.AddValue("Number");
+				pz.AddValue("");
+				pz.AddValue("A");
+				pz.AddValue(DefaultValue.z);
+
+				// release memory
+				//animCurveNode.saveDataOnDisk(saveFileFolder);
+				//objMainNode.addSubNode(animCurveNode);
+
+
 				return Node;
 			}
 
 			public FbxObject AddAnimationCurve(float[] curveData)
 			{
-				//	add a new object
-				var InputId = new FbxObject(AllocIdent());
-				Objects.Add(InputId);
-
-				// prepare some data
-				string keyValueFloatDataStr = "";
-				string timeArrayDataStr = "";
-
+				//	todo: use proper time!
+				var TimeData = new List<long>();
 				for (int i = 0; i < curveData.Length; i++)
 				{
-					if (i == 0)
-					{
-						keyValueFloatDataStr += curveData[i].ToString();
-						timeArrayDataStr += FbxHelper.getFbxSeconds(i, 60);
-					}
-					else
-					{
-						keyValueFloatDataStr += "," + curveData[i].ToString();
-						timeArrayDataStr += "," + FbxHelper.getFbxSeconds(i, 60);
-					}
+					TimeData.Add(FbxHelper.getFbxSeconds(i, 60));
 				}
-				throw new System.Exception("todo");
-				/*
+
+				//	add a new object
+				var CurveNodeObj = new FbxObject(AllocIdent(), "AnimationCurve");
+				Objects.Add(CurveNodeObj);
+				var CurveNode = CurveNodeObj.Definition;
+				CurveNode.AddValue(CurveNodeObj.Ident);
+				CurveNode.AddValue("AnimCurve::");	//	name
+				CurveNode.AddValue("");
+
 				//AnimationCurve: 106102887970656, "AnimCurve::", "" 
-				string nodeData = inputId + ", \"AnimCurve::\", \"\"";
-				FbxDataNode curveNode = new FbxDataNode("AnimationCurve", nodeData, 1);
+				//string nodeData = inputId + ", \"AnimCurve::\", \"\"";
+				//FbxDataNode curveNode = new FbxDataNode("AnimationCurve", nodeData, 1);
 
-				string dataLengthStr = curveData.Length.ToString();
 
-				curveNode.addSubNode("Default", "0");
-				curveNode.addSubNode("KeyVer", "4008");
+				CurveNode.AddProperty("Default", 0);
+				CurveNode.AddProperty("KeyVer", 4008);
 
-				FbxDataNode keyTimeNode = new FbxDataNode("KeyTime", "*" + dataLengthStr, 2);
-				keyTimeNode.addSubNode("a", timeArrayDataStr);
-				curveNode.addSubNode(keyTimeNode);
+				var keyTimeNode = CurveNode.AddProperty("KeyTime");
+				keyTimeNode.AddValue("*" + curveData.Length);
+				keyTimeNode.AddProperty("a",new FbxValue_Ints(TimeData));
+				//FbxDataNode keyTimeNode = new FbxDataNode("KeyTime", "*" + dataLengthStr, 2);
+				//keyTimeNode.addSubNode("a", timeArrayDataStr);
+				//curveNode.addSubNode(keyTimeNode);
 
-				FbxDataNode keyValuesNode = new FbxDataNode("KeyValueFloat", "*" + dataLengthStr, 2);
-				keyValuesNode.addSubNode("a", keyValueFloatDataStr);
-				curveNode.addSubNode(keyValuesNode);
+				var keyValuesNode = CurveNode.AddProperty("KeyValueFloat");
+				keyValuesNode.AddValue("*" + curveData.Length);
+				keyValuesNode.AddProperty("a",new FbxValue_Floats(curveData));
+				//var keyValuesNode = new FbxDataNode("KeyValueFloat", "*" + dataLengthStr, 2);
+				//keyValuesNode.addSubNode("a", keyValueFloatDataStr);
+				//curveNode.addSubNode(keyValuesNode);
 
-				curveNode.addSubNode(";KeyAttrFlags", "Cubic|TangeantAuto|GenericTimeIndependent|GenericClampProgressive");
+				//curveNode.addSubNode(";KeyAttrFlags", "Cubic|TangeantAuto|GenericTimeIndependent|GenericClampProgressive");
+				var keyAttrFlagsNode = CurveNode.AddProperty("KeyAttrFlags");
+				keyAttrFlagsNode.AddComment("KeyAttrFlags = Cubic | TangeantAuto | GenericTimeIndependent | GenericClampProgressive");
+				//FbxDataNode keyAttrFlagsNode = new FbxDataNode("KeyAttrFlags", "*1", 2);
+				keyAttrFlagsNode.AddValue("*1");
+				keyAttrFlagsNode.AddProperty("a", "24840");
+				//curveNode.addSubNode(keyAttrFlagsNode);
 
-				FbxDataNode keyAttrFlagsNode = new FbxDataNode("KeyAttrFlags", "*1", 2);
-				keyAttrFlagsNode.addSubNode("a", "24840");
-				curveNode.addSubNode(keyAttrFlagsNode);
-
-				FbxDataNode keyRefCountNode = new FbxDataNode("KeyAttrRefCount", "*1", 2);
-				keyRefCountNode.addSubNode("a", dataLengthStr);
-				curveNode.addSubNode(keyRefCountNode);
+				var keyRefCountNode = CurveNode.AddProperty("KeyAttrRefCount");
+				keyRefCountNode.AddValue("*1");
+				//FbxDataNode keyRefCountNode = new FbxDataNode("KeyAttrRefCount", "*1", 2);
+				keyRefCountNode.AddProperty("a", curveData.Length);
+				//keyRefCountNode.addSubNode("a", dataLengthStr);
+				//curveNode.addSubNode(keyRefCountNode);
 
 				//	objects.add curvenode
 				//return curveNode;
-				*/
-				return InputId;
+			
+				return CurveNodeObj;
 			}
 		}
 
@@ -693,9 +791,9 @@ namespace PopX
 			MakeAnimationNode(Anim, AnimLayer, ObjectManager, ConnectionManager, out AnimNodePosition, out AnimNodeRotation, out AnimNodeScale);
 
 			//	object connection
-			ConnectionManager.Add( new FbxConnection("AnimCurveNode", "T", AnimNodePosition, "Model", AnimatedObject.Name, AnimatedObject, "OP", "Lcl Translation"));
-			ConnectionManager.Add( new FbxConnection("AnimCurveNode", "R", AnimNodeRotation, "Model", AnimatedObject.Name, AnimatedObject, "OP", "Lcl Rotation"));
-			ConnectionManager.Add( new FbxConnection("AnimCurveNode", "S", AnimNodeScale, "Model", AnimatedObject.Name, AnimatedObject, "OP", "Lcl Scaling"));
+			ConnectionManager.Add( new FbxConnection("AnimCurveNode", "T", AnimNodePosition, "Model", AnimatedObject.TypeName, AnimatedObject, "OP", "Lcl Translation"));
+			ConnectionManager.Add( new FbxConnection("AnimCurveNode", "R", AnimNodeRotation, "Model", AnimatedObject.TypeName, AnimatedObject, "OP", "Lcl Rotation"));
+			ConnectionManager.Add( new FbxConnection("AnimCurveNode", "S", AnimNodeScale, "Model", AnimatedObject.TypeName, AnimatedObject, "OP", "Lcl Scaling"));
 		}
 
 
