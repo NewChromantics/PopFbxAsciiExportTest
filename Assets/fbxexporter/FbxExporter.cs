@@ -57,58 +57,6 @@ public class TransformTracker
 }
 
 
-public class AnimFrame
-{
-	public Vector3 Position;
-	public Quaternion Rotation;
-	public Vector3 RotationEular{ get { return Rotation.eulerAngles; }}
-	public Vector3 Scale;
-	public float Time;
-}
-
-public class AnimObject
-{
-	public string Name;
-	public List<AnimFrame> Frames;
-
-	public void GetCurveData(out float[] x, out float[] y, out float[] z, System.Func<AnimFrame, float> GetX, System.Func<AnimFrame, float> GetY,System.Func<AnimFrame, float> GetZ)
-	{
-		x = new float[Frames.Count];
-		y = new float[Frames.Count];
-		z = new float[Frames.Count];
-		for (int f = 0; f < Frames.Count; f++)
-		{
-			var Frame = Frames[f];
-			x[f] = GetX(Frame);
-			y[f] = GetY(Frame);
-			z[f] = GetZ(Frame);
-		}
-	}
-	public void GetPositionCurveData(out float[] x, out float[] y, out float[] z)
-	{
-		System.Func<AnimFrame, float> GetX = (Frame) => { return Frame.Position.x; };
-		System.Func<AnimFrame, float> GetY = (Frame) => { return Frame.Position.y; };
-		System.Func<AnimFrame, float> GetZ = (Frame) => { return Frame.Position.z; };
-		GetCurveData(out x, out y, out z, GetX, GetY, GetZ);
-	}
-
-	public void GetRotationCurveData(out float[] x, out float[] y, out float[] z)
-	{
-		System.Func<AnimFrame, float> GetX = (Frame) => { return Frame.RotationEular.x; };
-		System.Func<AnimFrame, float> GetY = (Frame) => { return Frame.RotationEular.y; };
-		System.Func<AnimFrame, float> GetZ = (Frame) => { return Frame.RotationEular.z; };
-		GetCurveData(out x, out y, out z, GetX, GetY, GetZ);
-	}
-
-	public void GetScaleCurveData(out float[] x, out float[] y, out float[] z)
-	{
-		System.Func<AnimFrame, float> GetX = (Frame) => { return Frame.Scale.x; };
-		System.Func<AnimFrame, float> GetY = (Frame) => { return Frame.Scale.y; };
-		System.Func<AnimFrame, float> GetZ = (Frame) => { return Frame.Scale.z; };
-		GetCurveData(out x, out y, out z, GetX, GetY, GetZ);
-	}
-}
-
 
 public class FbxExporter : MonoBehaviour
 {
@@ -122,8 +70,9 @@ public class FbxExporter : MonoBehaviour
 
 	// objs to track
 	Transform[] observeTargets;
-	TransformTracker[] trackers;
+	//TransformTracker[] trackers;
 	int objNums = -1;
+	//objNums = trackers.Length;
 
 
 	// record operation settings
@@ -138,74 +87,6 @@ public class FbxExporter : MonoBehaviour
 
 
 
-	// for recording
-	bool isRecording = false;
-
-
-	// Use this for initialization
-	void Start ()
-	{
-		SetupRecordItems ();
-	}
-
-	void SetupRecordItems ()
-	{
-		
-		// get all record objs
-		observeTargets = gameObject.GetComponentsInChildren<Transform> ();
-		trackers = new TransformTracker[ observeTargets.Length ];
-
-		objNums = trackers.Length;
-
-		for (int i = 0; i < objNums; i++) {
-
-			string namePath = observeTargets [i].name;
-
-			// if there are some nodes with same names, include path
-			if (includePathName) {
-				//namePath = AnimationRecorderHelper.GetTransformPathName (transform, observeTargets [i]);
-				namePath = observeTargets [i].name;
-				Debug.Log ("get name: " + namePath);
-			}
-			trackers [i] = new TransformTracker (observeTargets [i], recordPos, recordRot, recordScale);
-
-		}
-		Debug.Log ("setting complete");
-	}
-
-
-	
-	// Update is called once per frame
-	void Update ()
-	{
-		if (Input.GetKeyDown (startRecordKey))
-			StartRecording ();
-
-		if (Input.GetKeyDown (endRecordKey))
-			EndRecording ();
-	}
-
-	void StartRecording ()
-	{
-		isRecording = true;
-		Debug.Log ("Start Recording");
-	}
-
-	void EndRecording ()
-	{
-		isRecording = false;
-		Debug.Log ("End Recording");
-
-		StartCoroutine (ExportToFile ());
-	}
-
-	void LateUpdate ()
-	{
-		if (isRecording) {
-			for (int i = 0; i < trackers.Length; i++)
-				trackers [i].recordFrame ();
-		}
-	}
 
 	void ModifyDefinitions (string targetFilePath)
 	{
@@ -280,7 +161,7 @@ public class FbxExporter : MonoBehaviour
 		File.WriteAllText (targetFilePath, headContent + defResultData + footContent);
 	}
 
-	IEnumerator ExportToFile ()
+	void ExportToFile (System.Action<string> WriteLine,List<AnimObject> AnimObjects)
 	{
 
 		Debug.Log ("copy file ...");
@@ -310,8 +191,6 @@ public class FbxExporter : MonoBehaviour
 		writer.Close ();
 		reader.Close ();
 
-		yield return null;
-
 
 
 
@@ -327,7 +206,7 @@ public class FbxExporter : MonoBehaviour
 				objNodeIndex = i;
 		}
 
-		yield return null;
+
 
 		// setup converter
 		fbxObj = new FbxObjectsManager (allNodes[objNodeIndex], exportFileFolder);
@@ -338,7 +217,7 @@ public class FbxExporter : MonoBehaviour
 
 		Debug.Log ("Generating Nodes ...");
 
-		List<AnimObject> AnimObjects;
+
 
 		// add anim nodes
 		for (int i = 0; i < AnimObjects.Count; i++)
@@ -374,9 +253,9 @@ public class FbxExporter : MonoBehaviour
 			 */
 
 			// create Animation Curve Nodes
-			fbxObj.AddAnimationCurveNode(animCurveNodeT_id, FbxAnimationCurveNodeType.Translation, observeTargets[i].localPosition);
-			fbxObj.AddAnimationCurveNode(animCurveNodeR_id, FbxAnimationCurveNodeType.Rotation, observeTargets[i].localRotation.eulerAngles);
-			fbxObj.AddAnimationCurveNode(animCurveNodeS_id, FbxAnimationCurveNodeType.Scale, observeTargets[i].localScale);
+			fbxObj.AddAnimationCurveNode(animCurveNodeT_id, FbxAnimationCurveNodeType.Translation, ao.Frames[0].Position);
+			fbxObj.AddAnimationCurveNode(animCurveNodeR_id, FbxAnimationCurveNodeType.Rotation, ao.Frames[0].RotationEular);
+			fbxObj.AddAnimationCurveNode(animCurveNodeS_id, FbxAnimationCurveNodeType.Scale, ao.Frames[0].Scale);
 
 
 			float[] xData;
@@ -384,16 +263,7 @@ public class FbxExporter : MonoBehaviour
 			float[] zData;
 			//int dataCount = objTracker.posDataList.Count;
 			ao.GetPositionCurveData(out xData, out yData, out zData);
-			/*
-			// create Curves
-			// put in pos data
-			for (int dataI = 0; dataI < dataCount; dataI++) {
-				Vector3 mayaPos = objTracker.posDataList [dataI];
-				xData [dataI] = mayaPos.x;
-				yData [dataI] = mayaPos.y;
-				zData [dataI] = mayaPos.z;
-			}
-			*/
+
 			fbxObj.AddAnimationCurve (curveT_X_id, xData);
 			fbxObj.AddAnimationCurve (curveT_Y_id, yData);
 			fbxObj.AddAnimationCurve (curveT_Z_id, zData);
@@ -431,24 +301,20 @@ public class FbxExporter : MonoBehaviour
 			fbxConn.AddConnectionItem ("AnimCurve", "", curveS_Y_id, "AnimCurveNode", "S", animCurveNodeS_id, "OP", "d|Y");
 			fbxConn.AddConnectionItem ("AnimCurve", "", curveS_Z_id, "AnimCurveNode", "S", animCurveNodeS_id, "OP", "d|Z");
 
-			yield return null;
 		}
 
 		Debug.Log ("Edit Defitions");
 		ModifyDefinitions (exportFilePath);
-		yield return null;
 
 
 		Debug.Log ("Edit Objects Data");
 
 		// apply edition to file
 		fbxObj.EditTargetFile (exportFilePath);
-		yield return null;
 
 		Debug.Log ("Edit Connections Data");
 
 		fbxConn.EditTargetFile (exportFilePath);
-		yield return null;
 
 
 		// clear data
