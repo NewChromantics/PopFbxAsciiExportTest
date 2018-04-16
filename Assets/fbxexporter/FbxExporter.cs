@@ -160,7 +160,7 @@ public class FbxExporter : MonoBehaviour
 		Debug.Log (footContent);
 		File.WriteAllText (targetFilePath, headContent + defResultData + footContent);
 	}
-
+	/*
 	void ExportToFile (System.Action<string> WriteLine,List<AnimObject> AnimObjects)
 	{
 
@@ -248,9 +248,6 @@ public class FbxExporter : MonoBehaviour
 
 			Debug.Log("Generating Node [" + objName + "]");
 
-			/*
-			 * Create Objs
-			 */
 
 			// create Animation Curve Nodes
 			fbxObj.AddAnimationCurveNode(animCurveNodeT_id, FbxAnimationCurveNodeType.Translation, ao.Frames[0].Position);
@@ -322,7 +319,7 @@ public class FbxExporter : MonoBehaviour
 
 		Debug.Log ("End Exporting");
 	}
-
+*/
 
 	// generate ID
 	int nowIdNum = 6000001;
