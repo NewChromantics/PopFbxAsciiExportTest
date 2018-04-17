@@ -22,6 +22,16 @@ public class AnimObject
 {
 	public List<AnimFrame> Frames;
 
+	public float GetStartTime()
+	{
+		return Frames[0].Time;
+	}
+
+	public float GetEndTime()
+	{
+		return Frames[Frames.Count-1].Time;
+	}
+
 	public void AddFrame(Vector3 Position,Quaternion Rotation,float Time)
 	{
 		var Frame = new AnimFrame();
@@ -31,6 +41,16 @@ public class AnimObject
 		Frame.Time = Time;
 		Pop.AllocIfNull(ref Frames);
 		Frames.Add(Frame);
+	}
+
+	public void GetCurveTimes(out float[] Times)
+	{
+		Times = new float[Frames.Count];
+		for (int f = 0; f < Frames.Count; f++)
+		{
+			var Frame = Frames[f];
+			Times[f] = Frame.Time;
+		}
 	}
 
 	public void GetCurveData(out float[] x, out float[] y, out float[] z, System.Func<AnimFrame, float> GetX, System.Func<AnimFrame, float> GetY,System.Func<AnimFrame, float> GetZ)
@@ -79,10 +99,10 @@ namespace PopX
 	public class FbxProperty
 	{
 		//	Tag: value [value, value]
-		public List<string>			Comments;
-		public string				Name;
-		public List<FbxValue>		Values;
-		public List<FbxProperty>	Children;
+		public List<string> Comments;
+		public string Name;
+		public List<FbxValue> Values;
+		public List<FbxProperty> Children;
 
 		public FbxProperty(string Name)
 		{
@@ -92,10 +112,11 @@ namespace PopX
 		}
 
 		//	add value
-		public void AddValue(FbxValue Value)	{	Values.Add(Value);	}
-		public void AddValue(string Value)		{	AddValue(FbxValues.Create(Value));	}
-		public void AddValue(int Value)			{	AddValue(FbxValues.Create(Value));	}
-		public void AddValue(float Value)		{	AddValue(FbxValues.Create(Value));	}
+		public void AddValue(FbxValue Value) { Values.Add(Value); }
+		public void AddValue(string Value) { AddValue(FbxValues.Create(Value)); }
+		public void AddValue(int Value) { AddValue(FbxValues.Create(Value)); }
+		public void AddValue(long Value) { AddValue(FbxValues.Create(Value)); }
+		public void AddValue(float Value) { AddValue(FbxValues.Create(Value)); }
 
 
 		//	add child property
@@ -137,7 +158,7 @@ namespace PopX
 				AddComment(Comment);
 		}
 	};
-		
+
 	public interface FbxValue
 	{
 		string GetString();
@@ -147,6 +168,7 @@ namespace PopX
 	{
 		static public FbxValue Create(string Value) { return new FbxValue_String(Value); }
 		static public FbxValue Create(int Value) { return new FbxValue_Ints(Value); }
+		static public FbxValue Create(long Value) { return new FbxValue_Ints(Value); }
 		static public FbxValue Create(float Value) { return new FbxValue_Floats(Value); }
 	};
 
@@ -185,7 +207,7 @@ namespace PopX
 		public FbxValue_Floats(float[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
 		public FbxValue_Floats(Vector3 v) { Numbers = null; Append(v); }
 		public FbxValue_Floats(Vector3[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
-		public FbxValue_Floats(Vector3[] vs,System.Func<Vector3,Vector3> transform) { Numbers = null; foreach (var v in vs) Append(transform(v)); }
+		public FbxValue_Floats(Vector3[] vs, System.Func<Vector3, Vector3> transform) { Numbers = null; foreach (var v in vs) Append(transform(v)); }
 
 		void Append(Vector3 v)
 		{
@@ -218,8 +240,10 @@ namespace PopX
 			return String;
 		}
 
+		public FbxValue_Ints(long v) { Numbers = null; Append(v); }
 		public FbxValue_Ints(int v) { Numbers = null; Append(v); }
 		public FbxValue_Ints(int[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
+		public FbxValue_Ints(long[] vs) { Numbers = null; foreach (var v in vs) Append(v); }
 		public FbxValue_Ints(List<int> vs) { Numbers = null; foreach (var v in vs) Append(v); }
 		public FbxValue_Ints(List<long> vs) { Numbers = null; foreach (var v in vs) Append(v); }
 
@@ -234,7 +258,7 @@ namespace PopX
 	public struct FbxValue_String : FbxValue
 	{
 		public string String;
-		public string GetString() { return '"' + String+ '"'; }
+		public string GetString() { return '"' + String + '"'; }
 
 		public FbxValue_String(string Value)
 		{
@@ -244,7 +268,7 @@ namespace PopX
 
 	public class AnimationCurve
 	{
-		
+
 	}
 	public class AnimationCurveNode
 	{
@@ -323,12 +347,62 @@ namespace PopX
 
 		static FbxObject CreateAnimLayerObject(FbxObjectManager ObjectManager)
 		{
-			var Object = ObjectManager.CreateObject("AnimationLayer");
+			var Object = ObjectManager.CreateObject("AnimationLayer","AnimLayer::BaseLayer");
 			Object.Definition.AddValue(Object.Ident);
 			Object.Definition.AddValue("AnimLayer::BaseLayer");
 			Object.Definition.AddValue("");
 			//AnimationLayer: 3445458688, , "AnimLayer::BaseLayer" {
 			Object.Definition.AddProperty("Dummy");
+			return Object;
+		}
+
+		static FbxObject CreateAnimStackObject(AnimStack Anim,FbxObjectManager ObjectManager)
+		{
+			var Object = ObjectManager.CreateObject("AnimationStack","AnimStack::" + Anim.Name);
+			var Def = Object.Definition;
+			Def.AddValue(Object.Ident);
+			Def.AddValue("AnimStack::" + Anim.Name);
+			Def.AddValue("");
+			var Properties = Def.AddProperty("Properties70");
+
+			var LocalStart = Properties.AddProperty("P");
+			LocalStart.AddValue("LocalStart");
+			LocalStart.AddValue("KTime");
+			LocalStart.AddValue("Time");
+			LocalStart.AddValue("");
+			LocalStart.AddValue(FbxHelper.GetFbxSeconds(Anim.LocalStartTime));
+
+			var LocalStop = Properties.AddProperty("P");
+			LocalStop.AddValue("LocalStop");
+			LocalStop.AddValue("KTime");
+			LocalStop.AddValue("Time");
+			LocalStop.AddValue("");
+			LocalStop.AddValue(FbxHelper.GetFbxSeconds(Anim.LocalEndTime));
+
+			var ReferenceStart = Properties.AddProperty("P");
+			ReferenceStart.AddValue("ReferenceStart");
+			ReferenceStart.AddValue("KTime");
+			ReferenceStart.AddValue("Time");
+			ReferenceStart.AddValue("");
+			ReferenceStart.AddValue(FbxHelper.GetFbxSeconds(Anim.ReferenceStartTime));
+
+			var ReferenceStop = Properties.AddProperty("P");
+			ReferenceStop.AddValue("ReferenceStop");
+			ReferenceStop.AddValue("KTime");
+			ReferenceStop.AddValue("Time");
+			ReferenceStop.AddValue("");
+			ReferenceStop.AddValue(FbxHelper.GetFbxSeconds(Anim.ReferenceEndTime));
+
+			/*
+			AnimationStack: 362632224, "AnimStack::Take 001", "" {
+			Properties70:
+				{
+				P: "LocalStart", "KTime", "Time", "",0
+				P: "LocalStop", "KTime", "Time", "", 46186158000
+				P: "ReferenceStart", "KTime", "Time", "",0
+				P: "ReferenceStop", "KTime", "Time", "", 46186158000
+			}
+			*/
 			return Object;
 		}
 
@@ -341,11 +415,15 @@ namespace PopX
 			return Object;
 		}
 
-		static FbxObject CreateFbxObject(Mesh mesh, Matrix4x4 transform, FbxObjectManager ObjectManager)
+		static FbxObject CreateFbxObject(Mesh mesh, Matrix4x4 transform, FbxObjectManager ObjectManager,int? ExplicitIdent=null)
 		{
 			//var Object = ObjectManager.CreateObject(mesh.name);
 			//Object.Definition = new FbxProperty("Model");
-			var Object = ObjectManager.CreateObject("Model");
+			FbxObject Object;
+			if ( ExplicitIdent.HasValue )
+				Object = ObjectManager.CreateObject(ExplicitIdent.Value, "Model");
+			else
+				Object = ObjectManager.CreateObject( "Model");
 
 			var Model = Object.Definition;
 			//	gr: doesnt load in unity with an ident
@@ -491,8 +569,11 @@ namespace PopX
 				//	id vs name?
 				var ConnectionProp = ConnectionsProp.AddProperty(Connection.ConnectionType.ToString());
 
-				var Desc = string.Format("{0}({1}) -> {2}({3}", Connection.name1, Connection.type1, Connection.name2, Connection.type2);
-				ConnectionProp.AddComment( Connection.Comment );
+				var Desc = string.Format("{0}({1}) -> {2}({3})", Connection.name1, Connection.type1, Connection.name2, Connection.type2);
+				ConnectionProp.AddComment("");
+				ConnectionProp.AddComment(Desc);
+				if ( Connection.Comment != null )
+					ConnectionProp.AddComment( Connection.Comment );
 
 				ConnectionProp.AddValue(Connection.Relation.ToString());
 
@@ -512,9 +593,34 @@ namespace PopX
 			Export(WriteLine, ConnectionsProp);
 		}
 
+		public struct AnimStack
+		{
+			public string Name;
+			public float LocalStartTime;
+			public float LocalEndTime;
+			public float ReferenceStartTime { get { return LocalStartTime; } }
+			public float ReferenceEndTime { get { return LocalEndTime; } }
+
+			public AnimStack(string Name,float StartTime,float EndTime)
+			{
+				this.Name = Name;
+				this.LocalEndTime = EndTime;
+				this.LocalStartTime = StartTime;
+			}
+		}
 
 		public static void Export(System.Action<string> WriteLine, Mesh mesh, Matrix4x4 transform, List<string> Comments = null)
 		{
+			//	temp objects
+			var MeshAnim = new AnimObject();
+			MeshAnim.AddFrame(Vector3.zero, Quaternion.identity, 0);
+			MeshAnim.AddFrame(Vector3.one, Quaternion.identity, 1);
+
+			var AnimStack = new AnimStack("Take001", MeshAnim.GetStartTime(), MeshAnim.GetEndTime());
+
+
+
+			
 			Pop.AllocIfNull(ref Comments);
 			Comments.Add("Using WIP PopX.FbxAscii exporter from @soylentgraham");
 
@@ -524,14 +630,16 @@ namespace PopX
 
 			var ConnectionManager = new FbxConnectionManager();
 			var ObjectManager = new FbxObjectManager();
-			var MeshObject = CreateFbxObject(mesh, transform, ObjectManager);
-			var AnimLayer = CreateAnimLayerObject(ObjectManager);
 
-			//	create anim
-			var MeshAnim = new AnimObject();
-			MeshAnim.AddFrame(Vector3.zero, Quaternion.identity, 0);
-			MeshAnim.AddFrame(Vector3.one, Quaternion.identity, 1);
-			MakeAnimationNode(MeshAnim, MeshObject, AnimLayer, ObjectManager, ConnectionManager);
+			var MeshObject = CreateFbxObject(mesh, transform, ObjectManager);
+			var AnimLayerObject = CreateAnimLayerObject(ObjectManager);
+			var AnimStackObject = CreateAnimStackObject(AnimStack,ObjectManager);
+
+
+			MakeAnimationNode(MeshAnim, MeshObject, AnimLayerObject, ObjectManager, ConnectionManager);
+
+			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, AnimLayerObject.TypeName, AnimLayerObject.ObjectName, AnimLayerObject, AnimStackObject.TypeName, AnimStackObject.ObjectName, AnimStackObject, FbxRelationType.OO));
+
 
 
 			Export(WriteLine, ObjectManager);
@@ -542,10 +650,10 @@ namespace PopX
 			var SceneMesh = new Mesh();
 			SceneMesh.name = "Scene";
 			var MeshMaterialObject = CreateFbxObject_Material("CactusPack_Sprite", ObjectManager);
-			var SceneMeshObject = CreateFbxObject(SceneMesh,Matrix4x4.identity,ObjectManager);
+			var SceneMeshObject = CreateFbxObject(SceneMesh,Matrix4x4.identity,ObjectManager,FbxObjectManager.RootNodeIdent);
 
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.Connect, MeshObject.TypeName, MeshObject.GetValue0String(), MeshObject, SceneMeshObject.TypeName, SceneMeshObject.GetValue0String(), SceneMeshObject, FbxRelationType.OO,"mesh to scene mesh"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.Connect, MeshMaterialObject.TypeName, MeshMaterialObject.GetValue0String(), MeshMaterialObject, MeshObject.TypeName, MeshObject.GetValue0String(), MeshObject, FbxRelationType.OO,"material mesh"));
+			ConnectionManager.Add(new FbxConnection(FbxConnectionType.Connect, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, SceneMeshObject.TypeName, SceneMeshObject.ObjectName, SceneMeshObject, FbxRelationType.OO,"mesh to scene mesh"));
+			ConnectionManager.Add(new FbxConnection(FbxConnectionType.Connect, MeshMaterialObject.TypeName, MeshMaterialObject.ObjectName, MeshMaterialObject, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, FbxRelationType.OO,"material mesh"));
 			//	ConnectionManager
 			//var Connections = new List<object[]>();
 			//Connections.Add(new object[] { "OO", mesh, SceneMesh });
@@ -617,13 +725,25 @@ namespace PopX
 			public FbxProperty Definition;  //	property that goes in objects
 			public string TypeName	{ get { return Definition.Name; }}
 
-			//	for some object definitions where name is first value
-			public string GetValue0String() { return ((FbxValue_String)Definition.Values[0]).String; }
-
-
-
-			public FbxObject(int Ident,string TypeName)
+			public string ExplicitObjectName = null;
+			public string ObjectName	
 			{
+				get
+				{
+					return (ExplicitObjectName!=null) ? ExplicitObjectName : GetValue0String();
+				}
+			}
+
+			//	for some object definitions where name is first value
+			string GetValue0String() 
+			{
+				return ((FbxValue_String)Definition.Values[0]).String; 
+			}
+
+
+			public FbxObject(int Ident,string TypeName,string ObjectName=null)
+			{
+				this.ExplicitObjectName = ObjectName;
 				this.Ident = Ident;
 				this.Definition = new FbxProperty(TypeName);
 			}
@@ -645,6 +765,7 @@ namespace PopX
 		{
 			public List<FbxObject> Objects = new List<FbxObject>();
 			int IdentCounter = 6000;
+			public const int RootNodeIdent = 0;
 
 			int AllocIdent()
 			{
@@ -652,9 +773,14 @@ namespace PopX
 				return IdentCounter;
 			}
 
-			public FbxObject CreateObject(string TypeName)
+			public FbxObject CreateObject(string TypeName, string ObjectName = null)
 			{
-				var Node = new FbxObject(AllocIdent(),TypeName);
+				return CreateObject(AllocIdent(), TypeName, ObjectName);
+			}
+
+			public FbxObject CreateObject(int ExplicitIdent,string TypeName, string ObjectName = null)
+			{
+				var Node = new FbxObject(ExplicitIdent, TypeName, ObjectName);
 				Objects.Add(Node);
 				return Node;
 			}
@@ -709,13 +835,13 @@ namespace PopX
 				return Node;
 			}
 
-			public FbxObject AddAnimationCurve(float[] curveData)
+			public FbxObject AddAnimationCurve(float[] CurveDatas,float[] CurveTimes)
 			{
 				//	todo: use proper time!
-				var TimeData = new List<long>();
-				for (int i = 0; i < curveData.Length; i++)
+				var TimeDatas = new List<long>();
+				for (int i = 0; i < CurveDatas.Length; i++)
 				{
-					TimeData.Add(FbxHelper.getFbxSeconds(i, 60));
+					TimeDatas.Add(FbxHelper.GetFbxSeconds(CurveTimes[i]));
 				}
 
 				//	add a new object
@@ -735,15 +861,15 @@ namespace PopX
 				CurveNode.AddProperty("KeyVer", 4008);
 
 				var keyTimeNode = CurveNode.AddProperty("KeyTime");
-				keyTimeNode.AddValue("*" + curveData.Length);
-				keyTimeNode.AddProperty("a",new FbxValue_Ints(TimeData));
+				keyTimeNode.AddValue("*" + CurveDatas.Length);
+				keyTimeNode.AddProperty("a",new FbxValue_Ints(TimeDatas));
 				//FbxDataNode keyTimeNode = new FbxDataNode("KeyTime", "*" + dataLengthStr, 2);
 				//keyTimeNode.addSubNode("a", timeArrayDataStr);
 				//curveNode.addSubNode(keyTimeNode);
 
 				var keyValuesNode = CurveNode.AddProperty("KeyValueFloat");
-				keyValuesNode.AddValue("*" + curveData.Length);
-				keyValuesNode.AddProperty("a",new FbxValue_Floats(curveData));
+				keyValuesNode.AddValue("*" + CurveDatas.Length);
+				keyValuesNode.AddProperty("a",new FbxValue_Floats(CurveDatas));
 				//var keyValuesNode = new FbxDataNode("KeyValueFloat", "*" + dataLengthStr, 2);
 				//keyValuesNode.addSubNode("a", keyValueFloatDataStr);
 				//curveNode.addSubNode(keyValuesNode);
@@ -759,7 +885,7 @@ namespace PopX
 				var keyRefCountNode = CurveNode.AddProperty("KeyAttrRefCount");
 				keyRefCountNode.AddValue("*1");
 				//FbxDataNode keyRefCountNode = new FbxDataNode("KeyAttrRefCount", "*1", 2);
-				keyRefCountNode.AddProperty("a", curveData.Length);
+				keyRefCountNode.AddProperty("a", CurveDatas.Length);
 				//keyRefCountNode.addSubNode("a", dataLengthStr);
 				//curveNode.addSubNode(keyRefCountNode);
 
@@ -835,9 +961,14 @@ namespace PopX
 			MakeAnimationNode(Anim, AnimLayer, ObjectManager, ConnectionManager, out AnimNodePosition, out AnimNodeRotation, out AnimNodeScale);
 
 			//	object connection
-			ConnectionManager.Add( new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "T", AnimNodePosition, "Model", AnimatedObject.TypeName, AnimatedObject, FbxRelationType.OP, "Lcl Translation"));
-			ConnectionManager.Add( new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "R", AnimNodeRotation, "Model", AnimatedObject.TypeName, AnimatedObject, FbxRelationType.OP, "Lcl Rotation"));
-			ConnectionManager.Add( new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "S", AnimNodeScale, "Model", AnimatedObject.TypeName, AnimatedObject, FbxRelationType.OP, "Lcl Scaling"));
+			if ( AnimNodePosition != null )
+				ConnectionManager.Add( new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "T", AnimNodePosition, "Model", AnimatedObject.TypeName, AnimatedObject, FbxRelationType.OP, "Lcl Translation"));
+		
+			if (AnimNodeRotation != null)
+				ConnectionManager.Add( new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "R", AnimNodeRotation, "Model", AnimatedObject.TypeName, AnimatedObject, FbxRelationType.OP, "Lcl Rotation"));
+
+			if (AnimNodeScale != null)
+				ConnectionManager.Add( new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "S", AnimNodeScale, "Model", AnimatedObject.TypeName, AnimatedObject, FbxRelationType.OP, "Lcl Scaling"));
 		}
 
 
@@ -845,63 +976,82 @@ namespace PopX
 		{
 			// add anim nodes
 			var ao = Anim;
+			float[] TimeData;
+			ao.GetCurveTimes(out TimeData);
 
-			// create Animation Curve Nodes
-			var NodeT = ObjectManager.AddAnimationCurveNode(FbxAnimationCurveNodeType.Translation, ao.Frames[0].Position);
-			var NodeR = ObjectManager.AddAnimationCurveNode(FbxAnimationCurveNodeType.Rotation, ao.Frames[0].RotationEular);
-			var NodeS = ObjectManager.AddAnimationCurveNode(FbxAnimationCurveNodeType.Scale, ao.Frames[0].Scale);
-
-			AnimNodePosition = NodeT;
-			AnimNodeRotation = NodeR;
-			AnimNodeScale = NodeS;
-
-			//	get data
-			float[] TXData;
-			float[] TYData;
-			float[] TZData;
-			ao.GetPositionCurveData(out TXData, out TYData, out TZData);
-			var CurveTX = ObjectManager.AddAnimationCurve(TXData);
-			var CurveTY = ObjectManager.AddAnimationCurve(TYData);
-			var CurveTZ = ObjectManager.AddAnimationCurve(TZData);
-
-			float[] RXData;
-			float[] RYData;
-			float[] RZData;
-			ao.GetRotationCurveData(out RXData, out RYData, out RZData);
-			var CurveRX = ObjectManager.AddAnimationCurve(RXData);
-			var CurveRY = ObjectManager.AddAnimationCurve(RYData);
-			var CurveRZ = ObjectManager.AddAnimationCurve(RZData);
-
-			float[] SXData;
-			float[] SYData;
-			float[] SZData;
-			ao.GetScaleCurveData(out SXData, out SYData, out SZData);
-			var CurveSX = ObjectManager.AddAnimationCurve(SXData);
-			var CurveSY = ObjectManager.AddAnimationCurve(SYData);
-			var CurveSZ = ObjectManager.AddAnimationCurve(SZData);
+			bool MakeTranslation = true;
+			bool MakeRotation = false;
+			bool MakeScale = false;
 
 
+			if (MakeTranslation)
+			{
+				var NodeT = ObjectManager.AddAnimationCurveNode(FbxAnimationCurveNodeType.Translation, ao.Frames[0].Position);
+				AnimNodePosition = NodeT;
+				//	get data
+				float[] TXData;
+				float[] TYData;
+				float[] TZData;
+				ao.GetPositionCurveData(out TXData, out TYData, out TZData);
+				var CurveTX = ObjectManager.AddAnimationCurve(TXData, TimeData);
+				var CurveTY = ObjectManager.AddAnimationCurve(TYData, TimeData);
+				var CurveTZ = ObjectManager.AddAnimationCurve(TZData, TimeData);
 
-			//	animation 
-			//	note: "AnimCurveNode" instead of NodeT's type; "AnimationCurveNode"
-			//		"AnimLayer" instead of "AnimationLayer"
-			//		so maybe these connections aren't explicitly types
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "T", NodeT, "AnimLayer", "BaseLayer", AnimLayer, FbxRelationType.OO));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "R", NodeR, "AnimLayer", "BaseLayer", AnimLayer, FbxRelationType.OO));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurveNode", "S", NodeS, "AnimLayer", "BaseLayer", AnimLayer, FbxRelationType.OO));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurveNode", "T", NodeT, "AnimLayer", "BaseLayer", AnimLayer, FbxRelationType.OO));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveTX, "AnimCurveNode", "T", NodeT, FbxRelationType.OP, "d|X"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveTY, "AnimCurveNode", "T", NodeT, FbxRelationType.OP, "d|Y"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveTZ, "AnimCurveNode", "T", NodeT, FbxRelationType.OP, "d|Z"));
+			}
+			else
+			{
+				AnimNodePosition = null;
+			}
 
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveTX, "AnimCurveNode", "T", NodeT, FbxRelationType.OP, "d|X"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveTY, "AnimCurveNode", "T", NodeT, FbxRelationType.OP, "d|Y"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveTZ, "AnimCurveNode", "T", NodeT, FbxRelationType.OP, "d|Z"));
 
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveRX, "AnimCurveNode", "R", NodeR, FbxRelationType.OP, "d|X"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveRY, "AnimCurveNode", "R", NodeR, FbxRelationType.OP, "d|Y"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveRZ, "AnimCurveNode", "R", NodeR, FbxRelationType.OP, "d|Z"));
+			if (MakeRotation)
+			{
+				var NodeR = ObjectManager.AddAnimationCurveNode(FbxAnimationCurveNodeType.Rotation, ao.Frames[0].RotationEular);
+				AnimNodeRotation = NodeR;
+				float[] RXData;
+				float[] RYData;
+				float[] RZData;
+				ao.GetRotationCurveData(out RXData, out RYData, out RZData);
+				var CurveRX = ObjectManager.AddAnimationCurve(RXData, TimeData);
+				var CurveRY = ObjectManager.AddAnimationCurve(RYData, TimeData);
+				var CurveRZ = ObjectManager.AddAnimationCurve(RZData, TimeData);
 
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveSX, "AnimCurveNode", "S", NodeS, FbxRelationType.OP, "d|X"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveSY, "AnimCurveNode", "S", NodeS, FbxRelationType.OP, "d|Y"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C,"AnimCurve", "", CurveSZ, "AnimCurveNode", "S", NodeS, FbxRelationType.OP, "d|Z"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurveNode", "R", NodeR, "AnimLayer", "BaseLayer", AnimLayer, FbxRelationType.OO));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveRX, "AnimCurveNode", "R", NodeR, FbxRelationType.OP, "d|X"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveRY, "AnimCurveNode", "R", NodeR, FbxRelationType.OP, "d|Y"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveRZ, "AnimCurveNode", "R", NodeR, FbxRelationType.OP, "d|Z"));
+			}
+			else
+			{
+				AnimNodeRotation = null;
+			}
 
+
+			if (MakeScale)
+			{
+				var NodeS = ObjectManager.AddAnimationCurveNode(FbxAnimationCurveNodeType.Scale, ao.Frames[0].Scale);
+				AnimNodeScale = NodeS;
+				float[] SXData;
+				float[] SYData;
+				float[] SZData;
+				ao.GetScaleCurveData(out SXData, out SYData, out SZData);
+				var CurveSX = ObjectManager.AddAnimationCurve(SXData, TimeData);
+				var CurveSY = ObjectManager.AddAnimationCurve(SYData, TimeData);
+				var CurveSZ = ObjectManager.AddAnimationCurve(SZData, TimeData);
+
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurveNode", "S", NodeS, "AnimLayer", "BaseLayer", AnimLayer, FbxRelationType.OO));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveSX, "AnimCurveNode", "S", NodeS, FbxRelationType.OP, "d|X"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveSY, "AnimCurveNode", "S", NodeS, FbxRelationType.OP, "d|Y"));
+				ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, "AnimCurve", "", CurveSZ, "AnimCurveNode", "S", NodeS, FbxRelationType.OP, "d|Z"));
+			}
+			else
+			{
+				AnimNodeScale = null;
+			}
 		}
 
 

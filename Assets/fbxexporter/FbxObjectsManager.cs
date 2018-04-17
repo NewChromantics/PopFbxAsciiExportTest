@@ -103,10 +103,10 @@ public class FbxObjectsManager
 		for (int i = 0; i < curveData.Length; i++) {
 			if (i == 0) {
 				keyValueFloatDataStr += curveData [i].ToString ();
-				timeArrayDataStr += FbxHelper.getFbxSeconds (i, 60);
+				timeArrayDataStr += FbxHelper.GetFbxSeconds (i, 60);
 			} else {
 				keyValueFloatDataStr += "," + curveData [i].ToString ();
-				timeArrayDataStr += "," + FbxHelper.getFbxSeconds (i, 60);
+				timeArrayDataStr += "," + FbxHelper.GetFbxSeconds (i, 60);
 			}
 		}
 
