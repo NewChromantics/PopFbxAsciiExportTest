@@ -298,8 +298,8 @@ namespace PopX
 		public const string Tag_Comment = "; ";
 		public const string PropertySeperator = ", ";
 		public const int Version = (VersionMajor * 1000) + (VersionMinor * 100) + (VersionRelease * 10);
-		public const int VersionMajor = 6;
-		public const int VersionMinor = 1;
+		public const int VersionMajor = 7;
+		public const int VersionMinor = 5;
 		public const int VersionRelease = 0;
 		public const bool ReversePolygonOrder = true;
 
@@ -347,9 +347,10 @@ namespace PopX
 
 		static FbxObject CreateAnimLayerObject(FbxObjectManager ObjectManager)
 		{
-			var Object = ObjectManager.CreateObject("AnimationLayer","AnimLayer::BaseLayer");
+			var Name = "AnimLayer::BaseLayer";
+			var Object = ObjectManager.CreateObject("AnimationLayer",Name);
 			Object.Definition.AddValue(Object.Ident);
-			Object.Definition.AddValue("AnimLayer::BaseLayer");
+			Object.Definition.AddValue(Name);
 			Object.Definition.AddValue("");
 			//AnimationLayer: 3445458688, , "AnimLayer::BaseLayer" {
 			Object.Definition.AddProperty("Dummy");
@@ -358,10 +359,11 @@ namespace PopX
 
 		static FbxObject CreateAnimStackObject(AnimStack Anim,FbxObjectManager ObjectManager)
 		{
-			var Object = ObjectManager.CreateObject("AnimationStack","AnimStack::" + Anim.Name);
+			var Name = "AnimStack::" + Anim.Name;
+			var Object = ObjectManager.CreateObject("AnimationStack",Name);
 			var Def = Object.Definition;
 			Def.AddValue(Object.Ident);
-			Def.AddValue("AnimStack::" + Anim.Name);
+			Def.AddValue(Name);
 			Def.AddValue("");
 			var Properties = Def.AddProperty("Properties70");
 
@@ -408,10 +410,13 @@ namespace PopX
 
 		static FbxObject CreateFbxObject_Material(string MaterialName, FbxObjectManager ObjectManager)
 		{
-			var Object = ObjectManager.CreateObject("Material");
+			var Name = "Material::" + MaterialName;
+			var Object = ObjectManager.CreateObject("Material",Name);
 
 			var Model = Object.Definition;
-			Model.AddValue("Material::" + MaterialName);
+			Model.AddValue(Object.Ident);
+			Model.AddValue(Name);
+			Model.AddValue("");
 			return Object;
 		}
 
@@ -419,16 +424,18 @@ namespace PopX
 		{
 			//var Object = ObjectManager.CreateObject(mesh.name);
 			//Object.Definition = new FbxProperty("Model");
+
+			var Name = "Model::" + mesh.name;
+
 			FbxObject Object;
 			if ( ExplicitIdent.HasValue )
-				Object = ObjectManager.CreateObject(ExplicitIdent.Value, "Model");
+				Object = ObjectManager.CreateObject(ExplicitIdent.Value, "Model", Name);
 			else
-				Object = ObjectManager.CreateObject( "Model");
+				Object = ObjectManager.CreateObject( "Model", Name);
 
 			var Model = Object.Definition;
-			//	gr: doesnt load in unity with an ident
-			//Model.AddValue(Object.Ident);
-			Model.AddValue("Model::" + mesh.name);
+			Model.AddValue(Object.Ident);
+			Model.AddValue(Name);
 			Model.AddValue("Mesh");
 
 			Model.AddProperty("Version", 232);
@@ -472,16 +479,29 @@ namespace PopX
 			return Object;
 		}
 
-		static FbxProperty GetDefinitionsProperty(int MeshCount)
+		static FbxProperty GetDefinitionsProperty(FbxObjectManager ObjectManager)
 		{
 			var Defs = new FbxProperty("Definitions");
 			Defs.AddProperty("Version", 100);
-			Defs.AddProperty("Count", MeshCount);
-			var otm = Defs.AddProperty("ObjectType", "Model");
-			otm.AddProperty("Count", MeshCount);
-			var otg = Defs.AddProperty("ObjectType", "Geometry");
-			otg.AddProperty("Count", MeshCount);
 
+			Defs.AddProperty("Count", ObjectManager.Objects.Count);
+
+			//	get types
+			var TypeCounts = new Dictionary<string, int>();
+			foreach (var Object in ObjectManager.Objects)
+			{
+				var TypeName = Object.TypeName;
+				if (!TypeCounts.ContainsKey(TypeName))
+					TypeCounts.Add(TypeName, 1);
+				else
+					TypeCounts[TypeName]++;
+			}
+
+			foreach (var TypeCount in TypeCounts)
+			{
+				var ot = Defs.AddProperty("ObjectType", TypeCount.Key);
+				ot.AddProperty("Count", TypeCount.Value);
+			}
 			return Defs;
 		}
 
@@ -551,13 +571,13 @@ namespace PopX
 
 		enum FbxConnectionType
 		{
-			Connect,
+			//Connect,	not valid in 7.5.00
 			C
 		};
 		enum FbxRelationType
 		{
-			OO,
-			OP
+			OO,	//	object to object
+			OP	//	object to property
 		};
 
 		static void Export(System.Action<string> WriteLine, FbxConnectionManager ConnectionsManager)
@@ -569,14 +589,13 @@ namespace PopX
 				//	id vs name?
 				var ConnectionProp = ConnectionsProp.AddProperty(Connection.ConnectionType.ToString());
 
-				var Desc = string.Format("{0}({1}) -> {2}({3})", Connection.name1, Connection.type1, Connection.name2, Connection.type2);
+				var Desc = string.Format("{0}::{1} -> {2}::{3}", Connection.type1, Connection.name1, Connection.type2, Connection.name2);
 				ConnectionProp.AddComment("");
 				ConnectionProp.AddComment(Desc);
-				if ( Connection.Comment != null )
-					ConnectionProp.AddComment( Connection.Comment );
 
 				ConnectionProp.AddValue(Connection.Relation.ToString());
 
+				/*
 				if (Connection.ConnectionType == FbxConnectionType.Connect)
 				{
 					ConnectionProp.AddValue(Connection.name1);
@@ -584,11 +603,14 @@ namespace PopX
 					//	"Model::" + ((Mesh)Value).name);
 					//	"Material::" + ((Material)Value).name);
 				}
-				else if(Connection.ConnectionType == FbxConnectionType.C)
+				else */if(Connection.ConnectionType == FbxConnectionType.C)
 				{
 					ConnectionProp.AddValue(Connection.Object1.Ident);
 					ConnectionProp.AddValue(Connection.Object2.Ident);
 				}
+
+				if (Connection.PropertyName != null)
+					ConnectionProp.AddValue(Connection.PropertyName);
 			}
 			Export(WriteLine, ConnectionsProp);
 		}
@@ -642,28 +664,22 @@ namespace PopX
 
 
 
+			var Definitions = GetDefinitionsProperty(ObjectManager);
+			Export(WriteLine, Definitions);
+
 			Export(WriteLine, ObjectManager);
 
 
 
 			//	fake connections after we've exported ObjectManager
 			var SceneMesh = new Mesh();
-			SceneMesh.name = "Scene";
-			var MeshMaterialObject = CreateFbxObject_Material("CactusPack_Sprite", ObjectManager);
-			var SceneMeshObject = CreateFbxObject(SceneMesh,Matrix4x4.identity,ObjectManager,FbxObjectManager.RootNodeIdent);
+			SceneMesh.name = "Root";
+			var SceneMeshObject = CreateFbxObject(SceneMesh, Matrix4x4.identity, ObjectManager, FbxObjectManager.RootNodeIdent);
+			var MeshMaterialObject = CreateFbxObject_Material("DummyMaterial", ObjectManager);
 
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.Connect, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, SceneMeshObject.TypeName, SceneMeshObject.ObjectName, SceneMeshObject, FbxRelationType.OO,"mesh to scene mesh"));
-			ConnectionManager.Add(new FbxConnection(FbxConnectionType.Connect, MeshMaterialObject.TypeName, MeshMaterialObject.ObjectName, MeshMaterialObject, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, FbxRelationType.OO,"material mesh"));
-			//	ConnectionManager
-			//var Connections = new List<object[]>();
-			//Connections.Add(new object[] { "OO", mesh, SceneMesh });
-			//Connections.Add(new object[] { "OO", meshMaterial, mesh });
+			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, SceneMeshObject.TypeName, SceneMeshObject.ObjectName, SceneMeshObject, FbxRelationType.OO));
+			ConnectionManager.Add(new FbxConnection(FbxConnectionType.C, MeshMaterialObject.TypeName, MeshMaterialObject.ObjectName, MeshMaterialObject, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, FbxRelationType.OO));
 
-
-
-			//	todo: get details from object manager
-			var Definitions = GetDefinitionsProperty(1);
-			Export(WriteLine, Definitions);
 
 			Export(WriteLine, ConnectionManager);
 		}
@@ -925,9 +941,9 @@ namespace PopX
 			public string name2;
 			public FbxObject Object2;
 
-			public string Comment;
+			public string PropertyName;
 
-			public FbxConnection(FbxConnectionType ConnectionType,string type1,string name1,FbxObject Object1, string type2,string name2,FbxObject Object2, FbxRelationType Relation,string Comment=null)
+			public FbxConnection(FbxConnectionType ConnectionType,string type1,string name1,FbxObject Object1, string type2,string name2,FbxObject Object2, FbxRelationType Relation,string PropertyName=null)
 			{
 				this.ConnectionType = ConnectionType;
 
@@ -941,7 +957,10 @@ namespace PopX
 
 				this.Relation = Relation;
 
-				this.Comment = Comment;
+				if (Relation == FbxRelationType.OP)
+					if (string.IsNullOrEmpty(PropertyName))
+						throw new System.Exception("Connection object to property, missing property name");
+				this.PropertyName = PropertyName;
 			}
 			/*
 			public string getOutputData()
