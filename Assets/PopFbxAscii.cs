@@ -749,7 +749,7 @@ namespace PopX
 			var ConnectionManager = new FbxConnectionManager();
 			var ObjectManager = new FbxObjectManager();
 
-			var MeshObject = CreateFbxObject(mesh, transform, ObjectManager);
+			//var MeshObject = CreateFbxObject(mesh, transform, ObjectManager);
 			var CameraObject = CreateFbxObject(Cam, transform, ObjectManager, ConnectionManager);
 			var AnimLayerObject = CreateAnimLayerObject(ObjectManager);
 			var AnimStackObject = CreateAnimStackObject(AnimStack,ObjectManager);
@@ -774,9 +774,9 @@ namespace PopX
 			var SceneMeshObject = CreateFbxObject(SceneMesh, Matrix4x4.identity, ObjectManager, FbxObjectManager.RootNodeIdent);
 			var MeshMaterialObject = CreateFbxObject_Material("DummyMaterial", ObjectManager);
 
-			ConnectionManager.Add(new FbxConnection( MeshObject.TypeName, MeshObject.ObjectName, MeshObject, SceneMeshObject.TypeName, SceneMeshObject.ObjectName, SceneMeshObject, FbxRelationType.OO));
-			ConnectionManager.Add(new FbxConnection( MeshMaterialObject.TypeName, MeshMaterialObject.ObjectName, MeshMaterialObject, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, FbxRelationType.OO));
-			ConnectionManager.Add(new FbxConnection( CameraObject.TypeName, CameraObject.ObjectName, CameraObject, SceneMeshObject.TypeName, SceneMeshObject.ObjectName, SceneMeshObject, FbxRelationType.OO));
+			//ConnectionManager.Add(new FbxConnection( MeshObject, SceneMeshObject, FbxRelationType.OO));
+			ConnectionManager.Add(new FbxConnection( CameraObject, SceneMeshObject, FbxRelationType.OO));
+			//ConnectionManager.Add(new FbxConnection( MeshMaterialObject.TypeName, MeshMaterialObject.ObjectName, MeshMaterialObject, MeshObject.TypeName, MeshObject.ObjectName, MeshObject, FbxRelationType.OO));
 
 
 			Export(WriteLine, ConnectionManager);
